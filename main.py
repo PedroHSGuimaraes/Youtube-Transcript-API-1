@@ -50,7 +50,7 @@ def extract_video_id(url: str) -> str:
 
 
 def get_subtitles_with_ytdlp(video_url: str, language: str = "pt") -> str:
-    """Obtém a legenda mais completa para o idioma especificado usando yt-dlp."""
+    """Obtém legendas usando yt-dlp."""
     ydl_opts = {
         'writesubtitles': True,
         'writeautomaticsub': True,
@@ -59,55 +59,40 @@ def get_subtitles_with_ytdlp(video_url: str, language: str = "pt") -> str:
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
-        # Adiciona um User-Agent para simular um navegador. Pode ajudar em alguns casos.
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
-        },
     }
-
+    
     try:
-        logger.debug(f"Opções do yt-dlp: {ydl_opts}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
             
+            # Verifica legendas disponíveis
             subtitles = info.get('subtitles', {})
             automatic_captions = info.get('automatic_captions', {})
-            
-            possible_transcriptions = []
             
             # Prioridade: legendas manuais em português
             for lang in ['pt', 'pt-BR', 'pt-PT']:
                 if lang in subtitles:
-                    logger.info(f"Verificando legendas manuais em {lang}")
+                    logger.info(f"Encontradas legendas manuais em {lang}")
                     for sub in subtitles[lang]:
                         if sub.get('ext') == 'json3':
-                            logger.info(f"Baixando legenda manual de: {sub.get('url')}")
+                            logger.info(f"Baixando legendas de: {sub['url']}")
                             sub_data = ydl.urlopen(sub['url']).read().decode('utf-8')
-                            transcription = parse_json3_subtitles(sub_data)
-                            possible_transcriptions.append(transcription)
-                            logger.info(f"Adicionada transcrição manual com {len(transcription)} caracteres.")
-
+                            logger.info(f"Dados das legendas baixados: {len(sub_data)} bytes")
+                            return parse_json3_subtitles(sub_data)
+            
             # Segunda opção: legendas automáticas em português
             for lang in ['pt', 'pt-BR', 'pt-PT']:
                 if lang in automatic_captions:
-                    logger.info(f"Verificando legendas automáticas em {lang}")
+                    logger.info(f"Encontradas legendas automáticas em {lang}")
                     for sub in automatic_captions[lang]:
                         if sub.get('ext') == 'json3':
-                            logger.info(f"Baixando legenda automática de: {sub.get('url')}")
+                            logger.info(f"Baixando legendas automáticas de: {sub['url']}")
                             sub_data = ydl.urlopen(sub['url']).read().decode('utf-8')
-                            transcription = parse_json3_subtitles(sub_data)
-                            possible_transcriptions.append(transcription)
-                            logger.info(f"Adicionada transcrição automática com {len(transcription)} caracteres.")
-
-            # Se encontrarmos transcrições em português, retorna a mais longa
-            if possible_transcriptions:
-                longest_transcription = max(possible_transcriptions, key=len)
-                logger.info(f"Retornando a transcrição mais longa com {len(longest_transcription)} caracteres.")
-                return longest_transcription
-
+                            logger.info(f"Dados das legendas automáticas baixados: {len(sub_data)} bytes")
+                            return parse_json3_subtitles(sub_data)
+            
             # Terceira opção: legendas em inglês para traduzir
             if 'en' in subtitles or 'en' in automatic_captions:
-                logger.info("Nenhuma legenda em português encontrada. Tentando inglês.")
                 subs_dict = subtitles.get('en', automatic_captions.get('en', []))
                 for sub in subs_dict:
                     if sub.get('ext') == 'json3':
@@ -115,15 +100,15 @@ def get_subtitles_with_ytdlp(video_url: str, language: str = "pt") -> str:
                         transcription = parse_json3_subtitles(sub_data)
                         return f"[Transcrição em inglês - tradução automática não disponível]\n\n{transcription}"
             
+            # Lista todas as legendas disponíveis para debug
             all_langs = list(subtitles.keys()) + list(automatic_captions.keys())
             if all_langs:
-                raise ValueError(f"Legendas em português ou inglês não encontradas. Disponíveis em: {', '.join(set(all_langs))}")
+                raise ValueError(f"Legendas disponíveis apenas em: {', '.join(set(all_langs))}")
             else:
                 raise ValueError("Nenhuma legenda disponível para este vídeo")
                 
     except Exception as e:
         logger.error(f"Erro ao obter legendas com yt-dlp: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
 
