@@ -1,0 +1,17 @@
+
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+venv/
+__pycache__/
+
+*.bak
+*.tmp
+*.temp
